@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/controllers/inventory.controller.ts","./src/routes/index.ts","./src/routes/inventoryservice.ts","./src/utils/rabbitmq.ts"],"version":"5.8.2"}

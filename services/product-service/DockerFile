@@ -1,0 +1,23 @@
+# 1. Use Node 22 Alpine for a lightweight image
+FROM node:22-alpine
+
+# 2. Set working directory
+WORKDIR /app
+
+# 3. Copy only package files first to leverage Docker cache for faster rebuilds
+COPY package*.json ./
+
+# 4. Install dependencies
+RUN npm install
+
+# 5. Copy rest of the source code
+COPY . .
+
+# 6. Build TypeScript
+RUN npm run build
+
+# 7. Expose port (adjust if needed)
+EXPOSE 3001
+
+# 8. Start the app
+CMD ["node", "dist/index.js"]

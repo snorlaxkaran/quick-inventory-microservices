@@ -1,0 +1,19 @@
+{
+  "name": "inventory-service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsc -b && node dist/index.js"
+  },
+  "author": "karan barman",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@prisma/client": "^6.6.0",
+    "@types/amqplib": "^0.10.7",
+    "@types/express": "^5.0.1",
+    "amqplib": "^0.10.7",
+    "express": "^5.1.0",
+    "prisma": "^6.6.0"
+  }
+}

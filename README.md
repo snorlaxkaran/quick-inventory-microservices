@@ -44,8 +44,8 @@ This is a full-stack microservice-based Inventory Management System built using 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/inventory-microservices.git
-cd inventory-microservices
+git clone https://github.com/snorlaxkaran/quick-inventory-microservices.git
+cd quick-inventory-microservices
 
 
 📬 Contact

@@ -8,11 +8,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteProduct = exports.updateProduct = exports.createProduct = exports.getProduct = exports.getAllProducts = exports.generateSKU = void 0;
 const client_1 = require("@prisma/client");
-const rabbitMQ_1 = require("../utils/rabbitMQ");
+const amqplib_1 = __importDefault(require("amqplib"));
 const prisma = new client_1.PrismaClient();
+function sendProduct(productId, product_name) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const connection = yield amqplib_1.default.connect("amqp://localhost");
+            const channel = yield connection.createChannel();
+            const routerKey = "product_router_key";
+            const exchange = "productId_Exchance";
+            const queue = "productId_Queue";
+            yield channel.assertExchange(exchange, "direct", {
+                durable: true,
+            });
+            yield channel.assertQueue(queue, { durable: true });
+            yield channel.bindQueue(queue, exchange, routerKey);
+            channel.publish(exchange, routerKey, Buffer.from(JSON.stringify({ productId, product_name })));
+        }
+        catch (error) {
+            console.error(error);
+        }
+    });
+}
 const generateSKU = (productName) => {
     const prefix = productName.replace(/\s+/g, "-").toUpperCase().slice(0, 5);
     const random = Math.floor(1000 + Math.random() * 9000); // 4 digit random number
@@ -78,8 +101,7 @@ const createProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const newProduct = yield prisma.product.create({
             data: { name, price, description, sku: sku },
         });
-        const channel = yield (0, rabbitMQ_1.getChannel)();
-        channel.sendToQueue("product_created", Buffer.from(JSON.stringify({ productId: newProduct.id })), { persistent: true });
+        sendProduct(newProduct.id, newProduct.name);
         res.json({ data: newProduct });
     }
     catch (error) {

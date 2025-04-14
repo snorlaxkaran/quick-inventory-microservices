@@ -8,18 +8,53 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decreaseInventory = exports.increaseInventory = exports.getInventory = exports.getAllInventory = exports.createInventoryForProduct = void 0;
+exports.decreaseInventory = exports.increaseInventory = exports.getInventory = exports.getAllInventory = void 0;
+exports.getProductDataFromQueue = getProductDataFromQueue;
+const amqplib_1 = __importDefault(require("amqplib"));
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
-const createInventoryForProduct = (productId) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield prisma.inventory.upsert({
-        where: { productId },
-        update: {},
-        create: { productId, quantity: 0 },
+function getProductDataFromQueue() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const connection = yield amqplib_1.default.connect("amqp://localhost");
+            const channel = yield connection.createChannel();
+            const queue = "productId_Queue";
+            yield channel.assertQueue(queue, { durable: true });
+            channel.consume(queue, (message) => __awaiter(this, void 0, void 0, function* () {
+                if (message !== null) {
+                    const productData = JSON.parse(message.content.toString());
+                    console.log(`Received the product data`, productData);
+                    yield prisma.inventory.create({
+                        data: {
+                            productId: productData.productId,
+                            name: productData.product_name,
+                        },
+                    });
+                    channel.ack(message);
+                }
+            }));
+            channel.consume("order_request", (message) => __awaiter(this, void 0, void 0, function* () {
+                if (message !== null) {
+                    const { productId } = JSON.parse(message === null || message === void 0 ? void 0 : message.content.toString());
+                    const stock = yield prisma.inventory.findUnique({
+                        where: {
+                            productId: productId,
+                        },
+                    });
+                    channel.sendToQueue("inventory_response", Buffer.from(JSON.stringify(stock)));
+                }
+            }));
+        }
+        catch (error) {
+            console.log(`Did'nt received the product id`, error);
+            return null;
+        }
     });
-});
-exports.createInventoryForProduct = createInventoryForProduct;
+}
 const getAllInventory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const allInventory = yield prisma.inventory.findMany();
     res.status(200).json({ indeventory: allInventory });
@@ -42,10 +77,9 @@ const increaseInventory = (req, res) => __awaiter(void 0, void 0, void 0, functi
         res.status(400).json({ message: "Invalid amount" });
         return;
     }
-    const updated = yield prisma.inventory.upsert({
+    const updated = yield prisma.inventory.update({
         where: { productId },
-        update: { quantity: { increment: amount } },
-        create: { productId, quantity: amount },
+        data: { quantity: { increment: amount } },
     });
     res.status(200).json({ data: updated });
 });

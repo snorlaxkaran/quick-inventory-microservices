@@ -1,15 +1,49 @@
+import amqp from "amqplib";
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export const createInventoryForProduct = async (productId: number) => {
-  return await prisma.inventory.upsert({
-    where: { productId },
-    update: {},
-    create: { productId, quantity: 0 },
-  });
-};
+export async function getProductDataFromQueue() {
+  try {
+    const connection = await amqp.connect("amqp://localhost");
+    const channel = await connection.createChannel();
+    const queue = "productId_Queue";
+
+    await channel.assertQueue(queue, { durable: true });
+    channel.consume(queue, async (message) => {
+      if (message !== null) {
+        const productData = JSON.parse(message.content.toString());
+        console.log(`Received the product data`, productData);
+        await prisma.inventory.create({
+          data: {
+            productId: productData.productId,
+            name: productData.product_name,
+          },
+        });
+        channel.ack(message);
+      }
+    });
+
+    channel.consume("order_request", async (message) => {
+      if (message !== null) {
+        const { productId } = JSON.parse(message?.content.toString());
+        const stock = await prisma.inventory.findUnique({
+          where: {
+            productId: productId,
+          },
+        });
+        channel.sendToQueue(
+          "inventory_response",
+          Buffer.from(JSON.stringify(stock))
+        );
+      }
+    });
+  } catch (error) {
+    console.log(`Did'nt received the product id`, error);
+    return null;
+  }
+}
 
 export const getAllInventory = async (req: Request, res: Response) => {
   const allInventory = await prisma.inventory.findMany();
@@ -35,10 +69,9 @@ export const increaseInventory = async (req: Request, res: Response) => {
     res.status(400).json({ message: "Invalid amount" });
     return;
   }
-  const updated = await prisma.inventory.upsert({
+  const updated = await prisma.inventory.update({
     where: { productId },
-    update: { quantity: { increment: amount } },
-    create: { productId, quantity: amount },
+    data: { quantity: { increment: amount } },
   });
   res.status(200).json({ data: updated });
 };

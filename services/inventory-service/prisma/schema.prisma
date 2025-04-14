@@ -15,6 +15,7 @@ datasource db {
 
 model Inventory {
   id Int @id @default(autoincrement())
+  name String
   productId Int @unique
   quantity Int @default(0)
   updatedAt DateTime @updatedAt

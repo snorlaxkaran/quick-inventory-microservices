@@ -1,8 +1,32 @@
 import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
-import { getChannel } from "../utils/rabbitMQ";
+import amqp from "amqplib";
 
 const prisma = new PrismaClient();
+
+async function sendProduct(productId: number, product_name: string) {
+  try {
+    const connection = await amqp.connect("amqp://localhost");
+    const channel = await connection.createChannel();
+    const routerKey = "product_router_key";
+    const exchange = "productId_Exchance";
+    const queue = "productId_Queue";
+
+    await channel.assertExchange(exchange, "direct", {
+      durable: true,
+    });
+    await channel.assertQueue(queue, { durable: true });
+    await channel.bindQueue(queue, exchange, routerKey);
+
+    channel.publish(
+      exchange,
+      routerKey,
+      Buffer.from(JSON.stringify({ productId, product_name }))
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 export const generateSKU = (productName: string) => {
   const prefix = productName.replace(/\s+/g, "-").toUpperCase().slice(0, 5);
@@ -69,12 +93,7 @@ export const createProduct = async (req: Request, res: Response) => {
     const newProduct = await prisma.product.create({
       data: { name, price, description, sku: sku },
     });
-    const channel = await getChannel();
-    channel.sendToQueue(
-      "product_created",
-      Buffer.from(JSON.stringify({ productId: newProduct.id })),
-      { persistent: true }
-    );
+    sendProduct(newProduct.id, newProduct.name);
     res.json({ data: newProduct });
   } catch (error) {
     res.status(500).json({ message: "Internal server error" });
